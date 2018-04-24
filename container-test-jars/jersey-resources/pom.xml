@@ -47,6 +47,7 @@
             <arg>-unchecked</arg>
             <arg>-deprecation</arg>
             <arg>-feature</arg>
+            <arg>-nobootcp</arg> <!-- Java 9 issue: https://github.com/scala/bug/issues/10603 -->
           </args>
         </configuration>
       </plugin>
