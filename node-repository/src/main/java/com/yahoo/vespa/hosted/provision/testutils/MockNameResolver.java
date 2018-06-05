@@ -73,6 +73,7 @@ public class MockNameResolver implements NameResolver {
         if (mockAnyLookup) {
             String hostname = UUID.randomUUID().toString();
             records.put(hostname, Collections.singleton(ipAddress));
+            return Optional.of(hostname);
         }
         return Optional.empty();
     }

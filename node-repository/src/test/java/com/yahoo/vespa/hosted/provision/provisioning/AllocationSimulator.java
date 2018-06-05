@@ -3,28 +3,38 @@ package com.yahoo.vespa.hosted.provision.provisioning;
 
 import com.yahoo.component.Version;
 import com.yahoo.config.provision.ApplicationId;
+import com.yahoo.config.provision.Capacity;
 import com.yahoo.config.provision.ClusterMembership;
 import com.yahoo.config.provision.ClusterSpec;
+import com.yahoo.config.provision.DockerImage;
 import com.yahoo.config.provision.Flavor;
+import com.yahoo.config.provision.HostSpec;
 import com.yahoo.config.provision.NodeFlavors;
 import com.yahoo.config.provision.NodeType;
-import com.yahoo.lang.MutableInteger;
+import com.yahoo.config.provision.Zone;
+import com.yahoo.transaction.NestedTransaction;
+import com.yahoo.vespa.curator.mock.MockCurator;
 import com.yahoo.vespa.hosted.provision.Node;
 import com.yahoo.vespa.hosted.provision.NodeList;
+import com.yahoo.vespa.hosted.provision.NodeRepository;
+import com.yahoo.vespa.hosted.provision.node.Agent;
 import com.yahoo.vespa.hosted.provision.node.Allocation;
 import com.yahoo.vespa.hosted.provision.node.Generation;
 import com.yahoo.vespa.hosted.provision.node.History;
 import com.yahoo.vespa.hosted.provision.node.Status;
+import com.yahoo.vespa.hosted.provision.testutils.MockNameResolver;
 
 import javax.swing.JFrame;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
-
 
 /**
  * Graphically run allocation procedure to ease manual comprehension.
@@ -33,9 +43,12 @@ import java.util.Set;
  */
 public class AllocationSimulator {
 
+    private final MockNameResolver nameResolver;
     private AllocationVisualizer visualizer;
     private NodeList nodes;
     private NodeFlavors flavors;
+    private final NodeRepository nodeRepository;
+    private final NodeRepositoryProvisioner nodeRepositoryProvisioner;
 
     private AllocationSimulator(AllocationVisualizer visualizer) {
         this.visualizer = visualizer;
@@ -68,10 +81,25 @@ public class AllocationSimulator {
         initialNodes.add(host("host8", flavors.getFlavorOrThrow("host-small")));
         initialNodes.add(host("host9", flavors.getFlavorOrThrow("host-small")));
         initialNodes.add(host("host10", flavors.getFlavorOrThrow("host-small")));
-        initialNodes.add(node("node1", flavors.getFlavorOrThrow("d-2"), Optional.of("host1"), Optional.of("test")));
+
         nodes = new NodeList(initialNodes);
 
-        visualizer.addStep(nodes.asList(), "Initial state", "");
+        nameResolver = new MockNameResolver();
+        nameResolver.mockAnyLookup();
+        nodeRepository = new NodeRepository(flavors, new MockCurator(), Clock.fixed(Instant.EPOCH, ZoneId.systemDefault()), Zone.defaultZone(), nameResolver, new DockerImage("foo"), true);
+
+        nodeRepository.addNodes(nodes.asList());
+
+        nodeRepository.setDirty(nodes.asList(), Agent.system, "eur");
+        nodeRepository.setReady(nodeRepository.getNodes(), Agent.system, "eka");
+
+        NestedTransaction transaction = new NestedTransaction();
+        nodeRepository.activate(nodeRepository.getNodes(), transaction);
+        transaction.commit();
+
+        nodeRepositoryProvisioner = new NodeRepositoryProvisioner(nodeRepository, flavors, Zone.defaultZone());
+
+        visualizer.addStep(nodeRepository.getNodes(), "Initial state", "");
     }
 
     /* ------------ Create node and flavor methods ----------------*/
@@ -80,22 +108,34 @@ public class AllocationSimulator {
         return node(hostname, flavor, Optional.empty(), Optional.empty());
     }
 
-    private Node node(String hostname, Flavor flavor, Optional<String> parent, Optional<String> tenant) {
-        return new Node("fake", Collections.singleton("127.0.0.1"),
-                parent.isPresent() ? Collections.emptySet() : getAdditionalIP(), hostname, parent, flavor, Status.initial(),
-                parent.isPresent() ? Node.State.ready : Node.State.active, allocation(tenant), History.empty(), parent.isPresent() ? NodeType.tenant : NodeType.host);
+    private String randomIpv4Address() {
+        Random random = new Random();
+        return "10." + random.nextInt(254) + "." + random.nextInt(254) + "." + random.nextInt(254);
     }
 
-    private Set<String> getAdditionalIP() {
-        Set<String> h = new HashSet<String>();
-        Collections.addAll(h, "::1", "::2", "::3", "::4", "::5", "::6", "::7", "::8");
+    private String randomIp6Address() {
+        Random random = new Random();
+        return "::"+Integer.toHexString(random.nextInt(65534)) + ":" + Integer.toHexString(random.nextInt(65534));
+    }
+
+    private Node node(String hostname, Flavor flavor, Optional<String> parent, Optional<String> tenant) {
+        return new Node("fake", Collections.singleton(randomIpv4Address()),
+                parent.isPresent() ? Collections.emptySet() : getAdditionalIPs(), hostname, parent, flavor, Status.initial(),
+                parent.isPresent() ? Node.State.ready : Node.State.provisioned, allocation(tenant), History.empty(), parent.isPresent() ? NodeType.tenant : NodeType.host);
+    }
+
+    private Set<String> getAdditionalIPs() {
+        Set<String> h = new HashSet<>();
+        for (int i = 0; i < 10; i++) {
+            h.add(randomIp6Address());
+        }
         return h;
     }
 
     private Optional<Allocation> allocation(Optional<String> tenant) {
         if (tenant.isPresent()) {
             Allocation allocation = new Allocation(app(tenant.get()),
-                                                   ClusterMembership.from("container/id1/3", new Version()),
+                                                   ClusterMembership.from("container/id/1/3", new Version()),
                                                    Generation.inital(),
                                                    false);
             return Optional.of(allocation);
@@ -117,9 +157,16 @@ public class AllocationSimulator {
     /* ------------ Methods to add events to the system ----------------*/
 
     public void addCluster(String task, int count, Flavor flavor, String id) {
-        // TODO: Implement
         NodeSpec.CountNodeSpec nodeSpec = new NodeSpec.CountNodeSpec(count, flavor, false);
         nodes = new NodeList(nodes.asList());
+
+        ClusterSpec cluster = ClusterSpec.request(ClusterSpec.Type.content, ClusterSpec.Id.from("test"), Version.fromString("6.42"), false);
+
+        List<HostSpec> prepare = nodeRepositoryProvisioner.prepare(ApplicationId.fromSerializedForm("tenant:" + id + ":instance"), cluster, Capacity.fromNodeCount(count, flavor.name()), 1, (level, message) -> System.out.println(level + ": " + message));
+
+        visualizer.addStep(nodeRepository.getNodes(), task, "prepare");
+
+        nodeRepositoryProvisioner.activate(new NestedTransaction(), ApplicationId.fromSerializedForm("tenant:" + id + ":instance"), prepare);
     }
 
 
