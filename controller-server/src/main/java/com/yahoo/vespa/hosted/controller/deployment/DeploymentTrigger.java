@@ -236,6 +236,7 @@ public class DeploymentTrigger {
 
     /** Overrides the given application's platform and application changes with any contained in the given change. */
     public void forceChange(ApplicationId applicationId, Change change) {
+        // TODO jvenstad: Make the above call this, and move outstanding change clear here, and move data logic to Change.
         applications().lockOrThrow(applicationId, application -> {
             Change current = application.get().change();
             if (change.platform().isPresent())
