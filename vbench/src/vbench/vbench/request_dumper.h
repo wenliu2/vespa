@@ -13,7 +13,7 @@ namespace vbench {
 class RequestDumper : public Analyzer
 {
 private:
-    Handler<Request> &_next;
+    [[maybe_unused]] Handler<Request> &_next;
 
 public:
     RequestDumper(Handler<Request> &_next);

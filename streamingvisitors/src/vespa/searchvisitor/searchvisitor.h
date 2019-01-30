@@ -439,7 +439,7 @@ private:
     std::vector<AttrInfo>                   _attributeFields;
     search::common::SortSpec                _sortSpec;
     std::vector<size_t>                     _sortList;
-    IDocsumWriter                         * _docsumWriter;
+    [[maybe_unused]] IDocsumWriter        * _docsumWriter;
     vsm::SharedSearcherBuf                  _searchBuffer;
     std::vector<char>                       _tmpSortBuffer;
     search::AttributeVector::SP    _documentIdAttributeBacking;

@@ -449,7 +449,14 @@ TEST("testRank") {
 }
 
 TEST("testDump") {
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wshadow"
+#endif
     typedef SourceBlenderSearch::Child Source;
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
     SearchIterator::UP search(
             AndSearch::create(
                     Collect<SearchIterator*, MultiSearch::Children>()
