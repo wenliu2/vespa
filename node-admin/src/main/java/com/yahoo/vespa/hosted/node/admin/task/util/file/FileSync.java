@@ -23,10 +23,24 @@ public class FileSync {
 
     private final UnixPath path;
     private final FileContentCache contentCache;
+    private final AttributeSync attributeSync;
+
+    private Runnable preContentModificationCallback = () -> {};
 
     public FileSync(Path path) {
         this.path = new UnixPath(path);
         this.contentCache = new FileContentCache(this.path);
+        this.attributeSync = new AttributeSync(this.path);
+    }
+
+    public FileSync withPreContentModificationCallback(Runnable callback) {
+        this.preContentModificationCallback = callback;
+        return this;
+    }
+
+    public FileSync withPreAttributeModificationCallback(Runnable callback) {
+        attributeSync.withPreModificationCallback(callback);
+        return this;
     }
 
     /**
@@ -39,8 +53,9 @@ public class FileSync {
 
         boolean modifiedSystem = maybeUpdateContent(taskContext, partialFileData.getContent(), currentAttributes);
 
-        AttributeSync attributeSync = new AttributeSync(path.toPath()).with(partialFileData);
-        modifiedSystem |= attributeSync.converge(taskContext, currentAttributes);
+        modifiedSystem |= attributeSync
+                .with(partialFileData)
+                .converge(taskContext, currentAttributes);
 
         return modifiedSystem;
     }
@@ -53,6 +68,7 @@ public class FileSync {
         }
 
         if (!currentAttributes.exists()) {
+            preContentModificationCallback.run();
             taskContext.recordSystemModification(logger, "Creating file " + path);
             path.createParents();
             path.writeBytes(content.get());
@@ -63,6 +79,7 @@ public class FileSync {
         if (Arrays.equals(content.get(), contentCache.get(currentAttributes.get().lastModifiedTime()))) {
             return false;
         } else {
+            preContentModificationCallback.run();
             taskContext.recordSystemModification(logger, "Patching file " + path);
             path.writeBytes(content.get());
             contentCache.updateWith(content.get(), currentAttributes.forceGet().lastModifiedTime());

@@ -46,6 +46,16 @@ public class FileWriter {
         return this;
     }
 
+    public FileWriter withPreContentModificationCallback(Runnable callback) {
+        fileSync.withPreContentModificationCallback(callback);
+        return this;
+    }
+
+    public FileWriter withPreAttributeModificationCallback(Runnable callback) {
+        fileSync.withPreAttributeModificationCallback(callback);
+        return this;
+    }
+
     public FileWriter onlyIfFileDoesNotAlreadyExist() {
         overwriteExistingFile = false;
         return this;

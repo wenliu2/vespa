@@ -20,11 +20,12 @@ public class MakeDirectory {
     private final UnixPath path;
     private final AttributeSync attributeSync;
 
+    private Runnable preDirectoryCreationCallback = () -> {};
     private boolean createParents = false;
 
     public MakeDirectory(Path path) {
         this.path = new UnixPath(path);
-        this.attributeSync = new AttributeSync(path);
+        this.attributeSync = new AttributeSync(this.path);
     }
 
     /**
@@ -39,6 +40,16 @@ public class MakeDirectory {
         return this;
     }
 
+    public MakeDirectory withDirectoryCreationCallback(Runnable callback) {
+        this.preDirectoryCreationCallback = callback;
+        return this;
+    }
+
+    public MakeDirectory withPreAttributeModificationCallback(Runnable callback) {
+        attributeSync.withPreModificationCallback(callback);
+        return this;
+    }
+
     public boolean converge(TaskContext context) {
         boolean systemModified = false;
 
@@ -48,6 +59,8 @@ public class MakeDirectory {
                 throw new UncheckedIOException(new NotDirectoryException(path.toString()));
             }
         } else {
+            preDirectoryCreationCallback.run();
+
             if (createParents) {
                 // We'll skip logging system modification here, as we'll log about the creation
                 // of the directory next.

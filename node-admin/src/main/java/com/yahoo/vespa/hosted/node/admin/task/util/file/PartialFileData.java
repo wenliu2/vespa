@@ -4,6 +4,7 @@ package com.yahoo.vespa.hosted.node.admin.task.util.file;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -26,10 +27,10 @@ public class PartialFileData {
                             Optional<String> owner,
                             Optional<String> group,
                             Optional<String> permissions) {
-        this.content = content;
-        this.owner = owner;
-        this.group = group;
-        this.permissions = permissions;
+        this.content = Objects.requireNonNull(content);
+        this.owner = Objects.requireNonNull(owner);
+        this.group = Objects.requireNonNull(group);
+        this.permissions = Objects.requireNonNull(permissions);
     }
 
     public Optional<byte[]> getContent() {
