@@ -2,6 +2,7 @@
 package com.yahoo.config.provision;
 
 import com.google.common.collect.ImmutableList;
+import com.google.inject.Inject;
 import com.yahoo.config.provisioning.FlavorsConfig;
 
 import java.util.ArrayList;
@@ -33,6 +34,7 @@ public class Flavor {
      * Creates a Flavor, but does not set the replacesFlavors.
      * @param flavorConfig config to be used for Flavor.
      */
+    @Inject
     public Flavor(FlavorsConfig.Flavor flavorConfig) {
         this.name = flavorConfig.name();
         this.replacesFlavors = new ArrayList<>();
@@ -48,6 +50,24 @@ public class Flavor {
         this.retired = flavorConfig.retired();
         this.idealHeadroom = flavorConfig.idealHeadroom();
     }
+
+    public Flavor(String name, int cost, boolean isStock, Type type,
+                  double minCpuCores, double minMainMemoryAvailableGb, double minDiskAvailableGb,
+                  boolean fastDisk, double bandwidth, String description, boolean retired) {
+        this.name = name;
+        this.cost = cost;
+        this.isStock = isStock;
+        this.type = type;
+        this.minCpuCores = minCpuCores;
+        this.minMainMemoryAvailableGb = minMainMemoryAvailableGb;
+        this.minDiskAvailableGb = minDiskAvailableGb;
+        this.fastDisk = fastDisk;
+        this.bandwidth = bandwidth;
+        this.description = description;
+        this.retired = retired;
+        this.replacesFlavors = new ArrayList<>();
+    }
+
 
     /** Returns the unique identity of this flavor */
     public String name() { return name; }
